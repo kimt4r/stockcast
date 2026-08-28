@@ -1,0 +1,10 @@
+.env
+.env.paper
+.env.live
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.stockcast/
+dist/
+*.egg-info/

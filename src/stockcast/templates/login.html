@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stockcast 연결</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-brand">
+      <div class="brand"><span class="brand-mark">S</span><span>STOCKCAST</span></div>
+      <div class="hero-copy">
+        <span class="eyebrow">KIS OPEN API CONSOLE</span>
+        <h1>판단은 선명하게.<br><em>실행은 신중하게.</em></h1>
+        <p>한국투자증권 계좌를 안전하게 연결하고, 시장과 전략을 한 화면에서 살펴보세요.</p>
+      </div>
+      <div class="security-note"><span class="status-dot"></span> 자격 증명은 이 PC의 실행 메모리에만 보관됩니다.</div>
+    </section>
+    <section class="auth-panel">
+      <form method="post" action="/connect" class="connect-form" autocomplete="off">
+        <div class="form-heading"><span>01</span><div><h2>API 연결</h2><p>투자 환경을 선택하면 해당 인증 파일을 불러옵니다.</p></div></div>
+        {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+        <div class="segmented">
+          <label><input type="radio" name="environment" value="paper" checked><span>모의투자</span></label>
+          <label><input type="radio" name="environment" value="live"><span>실전투자</span></label>
+        </div>
+        <div class="credential-file-note">
+          <b>모의투자</b><code>.env.paper</code>
+          <b>실전투자</b><code>.env.live</code>
+        </div>
+        <button class="primary-button" type="submit"><span>인증 파일로 연결하기</span><b>→</b></button>
+        <p class="fine-print">API 키·시크릿·계좌번호는 선택한 로컬 파일에서만 읽습니다. 주문 제한은 로그인 후 설정할 수 있습니다.</p>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

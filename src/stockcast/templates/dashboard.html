@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>Stockcast 대시보드</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body class="dashboard-page">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">S</span><span>STOCKCAST</span></div>
+    <div class="connection"><span class="status-dot"></span><b>{{ '모의투자' if environment == 'paper' else '실전투자' }}</b><span>{{ account_mask }}</span></div>
+    <button id="logout" class="text-button">연결 해제</button>
+  </header>
+  <main class="dashboard">
+    <div id="api-error" class="api-error" role="alert" hidden></div>
+    <section class="welcome">
+      <div><span class="eyebrow">TRADING WORKSPACE</span><h1>오늘의 시장을<br>차분하게 읽어보세요.</h1></div>
+      <div class="search-box"><label for="symbol">종목 코드</label><div><input id="symbol" value="{{ allowed_symbols[0] if allowed_symbols else '005930' }}" maxlength="6"><button id="search">조회</button></div><small>허용 종목 {{ allowed_symbols|join(' · ') or '전체' }}</small></div>
+    </section>
+    <section class="metric-grid">
+      <article class="metric featured"><span>현재가</span><strong id="price">—</strong><small id="symbol-label">종목을 조회하세요</small></article>
+      <article class="metric"><span>전략 신호</span><strong id="signal" class="neutral">HOLD</strong><small>5일 / 20일 SMA 교차</small></article>
+      <article class="metric"><span>주문 안전 한도</span><strong>{{ '{:,}'.format(max_order_krw) }}<i>원</i></strong><small>1회 주문 기준</small></article>
+    </section>
+    <section class="work-grid">
+      <article class="panel chart-panel">
+        <div class="panel-heading"><div><span>PRICE TREND</span><h2>최근 종가 흐름</h2></div><span id="chart-state" class="pill">대기 중</span></div>
+        <div class="chart-wrap"><canvas id="chart" width="900" height="300"></canvas><div id="empty-chart">종목을 조회하면 차트가 표시됩니다.</div></div>
+      </article>
+      <article class="panel order-panel">
+        <div class="panel-heading"><div><span>ORDER TICKET</span><h2>주문 미리보기</h2></div></div>
+        <div class="side-toggle"><button data-side="buy" class="active">매수</button><button data-side="sell">매도</button></div>
+        <label class="field"><span>수량</span><div class="input-suffix"><input id="quantity" type="number" min="1" value="1"><b>주</b></div></label>
+        <label class="field"><span>지정가 <small>(0은 시장가)</small></span><div class="input-suffix"><input id="order-price" type="number" min="0" value="0"><b>원</b></div></label>
+        <button id="preview-order" class="primary-button">주문 조건 확인</button>
+        <div id="order-result" class="order-result">아직 주문은 전송되지 않았습니다.</div>
+      </article>
+    </section>
+    <section class="panel balance-panel">
+      <div class="panel-heading"><div><span>PORTFOLIO</span><h2>보유 잔고</h2></div><button id="load-balance" class="outline-button">잔고 새로고침</button></div>
+      <div class="balance-summary">
+        <div><span>예수금</span><strong id="cash-total">—</strong></div>
+        <div><span>총 평가금액</span><strong id="evaluation-total">—</strong></div>
+        <div><span>평가손익</span><strong id="profit-total">—</strong></div>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>종목</th><th>보유수량</th><th>평균단가</th><th>현재가</th><th>평가손익</th></tr></thead><tbody id="balance-body"><tr><td colspan="5" class="empty-row">잔고 불러오기를 눌러주세요.</td></tr></tbody></table></div>
+    </section>
+    <section class="panel autotrade-panel">
+      <div class="panel-heading"><div><span>PAPER AUTOPILOT</span><h2>모의투자 자동매매</h2></div><span id="autotrade-state" class="pill">중지됨</span></div>
+      {% if environment == 'paper' %}
+      <label class="auto-discover-toggle"><input id="auto-discover" type="checkbox" checked><span><b>시장 자동 검색</b><small>거래금액 상위 종목을 불러와 추세 점수가 높은 종목을 자동 선택</small></span></label>
+      <div class="auto-search-layout">
+      <aside class="discovery-panel">
+        <div class="discovery-heading"><div><b>자동검색 종목</b><small>선택하면 상단 차트와 연동됩니다.</small></div><button id="refresh-discovery" class="outline-button">검색</button></div>
+        <div class="discovery-columns"><span>종목명</span><span>종목코드</span><span>현재가</span></div>
+        <div id="discovery-list" class="discovery-list"><p>검색 결과를 불러오는 중입니다.</p></div>
+      </aside>
+      <div class="autotrade-controls">
+      <div class="autotrade-grid">
+        <label class="field wide"><span>직접 후보 종목 <small>(자동 검색 해제 시 사용)</small></span><input id="auto-symbols" value="{{ allowed_symbols|join(',') }}" placeholder="005930,000660"></label>
+        <label class="field"><span>1차 검색 수</span><input id="auto-scan-limit" type="number" min="1" max="20" value="10"></label>
+        <label class="field"><span>최종 선택 수</span><input id="auto-select-count" type="number" min="1" max="10" value="3"></label>
+        <label class="field"><span>종목당 수량</span><input id="auto-quantity" type="number" min="1" value="1"></label>
+        <label class="field"><span>실행 주기(초)</span><input id="auto-interval" type="number" min="60" value="120"></label>
+        <label class="field"><span>최대 보유 종목</span><input id="auto-max-positions" type="number" min="1" value="3"></label>
+        <label class="field"><span>손절률(%)</span><input id="auto-stop-loss" type="number" min="0.1" max="20" step="0.1" value="3"></label>
+        <label class="field"><span>익절률(%)</span><input id="auto-take-profit" type="number" min="0.1" max="50" step="0.1" value="5"></label>
+      </div>
+      <div class="autotrade-actions"><button id="start-autotrade" class="primary-button">자동매매 시작</button><button id="stop-autotrade" class="danger-button">즉시 중지</button></div>
+      <p class="autotrade-warning">모의투자 주문만 전송합니다. 수익을 보장하지 않으며 장 운영시간에만 매매합니다.</p>
+      </div>
+      </div>
+      <details class="strategy-details">
+        <summary><span>현재 매매기준 보기</span><b>+</b></summary>
+        <div class="strategy-rules">
+          <article><span>01 · 시장 검색</span><h3>거래금액 상위 종목 자동 수집</h3><p>KIS 국내주식 순위 API에서 유동성 후보를 가져오고 가격·거래량 기본 조건으로 1차 범위를 좁힙니다.</p></article>
+          <article><span>02 · 점수와 매수</span><h3>추세 점수 상위 종목 진입</h3><p>5일·20일 이동평균 격차, 최근 상승률과 거래금액 순위를 합산해 점수가 높은 미보유 종목을 매수합니다.</p></article>
+          <article><span>03 · 매도</span><h3>추세 하락 또는 목표 도달</h3><p>5일 이동평균이 20일 이동평균 아래로 내려가거나 설정한 손절률·익절률에 도달하면 매도합니다.</p></article>
+          <article><span>04 · 위험 제한</span><h3>수량과 보유 종목 수 제한</h3><p>종목당 수량, 최대 보유 종목 수, 주문 허용 종목과 1회 최대 주문금액을 모두 통과해야 주문합니다.</p></article>
+          <article><span>05 · 운영시간</span><h3>평일 09:00–15:20</h3><p>한국시간 장 운영 구간에만 주문하며 장외 시간에는 판단 기록만 남기고 대기합니다.</p></article>
+          <article><span>06 · 실행 범위</span><h3>모의투자 전용</h3><p>현재 자동매매 엔진은 실전 계좌에서 시작할 수 없으며 프로그램 종료 또는 즉시 중지 시 멈춥니다.</p></article>
+        </div>
+        <p class="strategy-disclaimer">이 기준은 수익을 보장하지 않습니다. 충분한 모의투자 결과를 확인한 뒤 조건을 조정하세요.</p>
+      </details>
+      <div id="autotrade-events" class="autotrade-events"><p>실행 기록이 없습니다.</p></div>
+      {% else %}<p class="autotrade-warning">실전 계좌에서는 자동매매 엔진이 잠겨 있습니다.</p>{% endif %}
+    </section>
+    <section class="panel settings-panel">
+      <div class="panel-heading"><div><span>SAFETY SETTINGS</span><h2>주문 안전 설정</h2></div></div>
+      <div class="settings-grid">
+        <label class="field"><span>허용 종목</span><input id="settings-symbols" value="{{ allowed_symbols|join(',') }}" placeholder="005930,000660"><small>비워두면 모든 국내주식 주문 허용</small></label>
+        <label class="field"><span>1회 최대 주문금액</span><div class="input-suffix"><input id="settings-max-order" type="number" value="{{ max_order_krw }}" min="1"><b>원</b></div></label>
+      </div>
+      {% if environment == 'live' %}<label class="live-check"><input id="settings-allow-live" type="checkbox"{% if allow_live %} checked{% endif %}><span>실전투자 주문 잠금 해제</span></label>{% endif %}
+      <button id="save-settings" class="outline-button">설정 저장</button>
+      <p id="settings-result" class="settings-result">저장하면 현재 환경의 인증 파일에도 반영됩니다.</p>
+    </section>
+  </main>
+  <div id="toast" role="status"></div>
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</body>
+</html>

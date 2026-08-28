@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stockcast"
+version = "0.1.0"
+description = "Safe-by-default KIS Open API trading bot"
+requires-python = ">=3.11"
+dependencies = ["requests>=2.32,<3", "flask>=3.1,<4"]
+
+[project.scripts]
+stockcast = "stockcast.cli:main"
+stockcast-app = "stockcast.web:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
