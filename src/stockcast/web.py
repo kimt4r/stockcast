@@ -155,7 +155,7 @@ def create_app(*, testing: bool = False) -> Flask:
         if current.settings.environment != "paper":
             raise ValueError("종목 자동검색은 모의투자에서만 사용할 수 있습니다.")
         limit = min(20, max(1, request.args.get("limit", 10, type=int)))
-        rows = current.client.volume_rank(limit=limit)
+        rows = current.client.daytrade_rank(limit=limit)
         results = []
         for row in rows:
             symbol = str(row.get("mksc_shrn_iscd") or row.get("stck_shrn_iscd") or "")
@@ -188,11 +188,25 @@ def create_app(*, testing: bool = False) -> Flask:
             auto_discover=data.get("auto_discover") is True,
             scan_limit=int(data.get("scan_limit", 10)),
             select_count=int(data.get("select_count", 3)),
-            quantity=int(data.get("quantity", 1)),
+            position_size_pct=float(data.get("position_size_pct", 10)),
             interval_seconds=int(data.get("interval_seconds", 120)),
             max_positions=int(data.get("max_positions", 3)),
             stop_loss_pct=float(data.get("stop_loss_pct", 3)),
             take_profit_pct=float(data.get("take_profit_pct", 5)),
+            daily_target_pct=float(data.get("daily_target_pct", 10)),
+            daily_loss_limit_pct=float(data.get("daily_loss_limit_pct", 3)),
+            reentry_cooldown_minutes=int(data.get("reentry_cooldown_minutes", 30)),
+            max_entries_per_symbol=int(data.get("max_entries_per_symbol", 2)),
+            max_daily_round_trips=int(data.get("max_daily_round_trips", 10)),
+            min_breakout_pct=float(data.get("min_breakout_pct", 0.2)),
+            exit_confirmation_bars=int(data.get("exit_confirmation_bars", 2)),
+            profit_lock_activation_pct=float(data.get("profit_lock_activation_pct", 1)),
+            profit_giveback_pct=float(data.get("profit_giveback_pct", 0.5)),
+            min_relative_volume=float(data.get("min_relative_volume", 1.5)),
+            trailing_activation_pct=float(data.get("trailing_activation_pct", 2)),
+            trailing_drawdown_pct=float(data.get("trailing_drawdown_pct", 0.7)),
+            breakeven_activation_pct=float(data.get("breakeven_activation_pct", 1)),
+            breakeven_floor_pct=float(data.get("breakeven_floor_pct", 0.1)),
         )
         if current.trader is None:
             current.trader = AutoTrader(current.client)

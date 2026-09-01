@@ -42,6 +42,55 @@ class KISClientTests(unittest.TestCase):
         self.assertEqual(call.kwargs["headers"]["tr_id"], "FHPST01710000")
         self.assertEqual(call.kwargs["params"]["FID_BLNG_CLS_CODE"], "3")
 
+    def test_intraday_prices_are_sorted_oldest_to_newest(self):
+        response = Mock(ok=True, status_code=200)
+        response.json.return_value = {
+            "rt_cd": "0",
+            "output2": [
+                {"stck_cntg_hour": "101000", "stck_prpr": "72000"},
+                {"stck_cntg_hour": "100900", "stck_prpr": "71000"},
+            ],
+        }
+        session = Mock()
+        session.get.return_value = response
+
+        prices = self.authenticated_client(session).intraday_prices("005930")
+
+        self.assertEqual(prices, [71_000, 72_000])
+        call = session.get.call_args
+        self.assertTrue(call.args[0].endswith("/quotations/inquire-time-itemchartprice"))
+        self.assertEqual(call.kwargs["headers"]["tr_id"], "FHKST03010200")
+
+    def test_daytrade_rank_returns_only_individual_stocks(self):
+        client = self.authenticated_client(Mock())
+        client.volume_rank = Mock(return_value=[
+            {"mksc_shrn_iscd": "005930", "hts_kor_isnm": "삼성전자", "acml_tr_pbmn": "100"},
+            {"mksc_shrn_iscd": "122630", "hts_kor_isnm": "KODEX 레버리지", "acml_tr_pbmn": "300"},
+            {"mksc_shrn_iscd": "360750", "hts_kor_isnm": "TIGER 미국S&P500", "acml_tr_pbmn": "200"},
+        ])
+
+        rows = client.daytrade_rank(limit=10)
+
+        self.assertEqual([row["mksc_shrn_iscd"] for row in rows], ["005930"])
+        client.volume_rank.assert_called_once_with(limit=10, division="1")
+
+    def test_daily_prices_loads_enough_history_for_long_trend(self):
+        response = Mock(ok=True, status_code=200)
+        response.json.return_value = {
+            "rt_cd": "0",
+            "output2": [{"stck_clpr": "72000"}, {"stck_clpr": "71000"}],
+        }
+        session = Mock()
+        session.get.return_value = response
+
+        prices = self.authenticated_client(session).daily_prices("005930")
+
+        self.assertEqual(prices, [71_000, 72_000])
+        call = session.get.call_args
+        self.assertTrue(call.args[0].endswith("/quotations/inquire-daily-itemchartprice"))
+        self.assertEqual(call.kwargs["headers"]["tr_id"], "FHKST03010100")
+        self.assertIn("FID_INPUT_DATE_1", call.kwargs["params"])
+
     def test_paper_balance_follows_continuation_and_keeps_summary(self):
         first = Mock(ok=True, status_code=200)
         first.headers = {"tr_cont": "M"}
@@ -70,6 +119,30 @@ class KISClientTests(unittest.TestCase):
         second_call = session.get.call_args_list[1].kwargs
         self.assertEqual(second_call["headers"]["tr_cont"], "M")
         self.assertEqual(second_call["params"]["CTX_AREA_FK100"], "next-fk")
+
+    def test_daily_executions_uses_paper_fill_inquiry_and_sanitizes_rows(self):
+        response = Mock(ok=True, status_code=200)
+        response.json.return_value = {
+            "rt_cd": "0",
+            "output1": [{
+                "ord_dt": "20260901", "ord_tmd": "105320", "odno": "12345",
+                "pdno": "005930", "prdt_name": "삼성전자",
+                "sll_buy_dvsn_cd_name": "매수", "ord_qty": "3",
+                "tot_ccld_qty": "3", "avg_prvs": "71200",
+                "tot_ccld_amt": "213600", "rmn_qty": "0", "CANO": "secret",
+            }],
+        }
+        session = Mock()
+        session.get.return_value = response
+
+        rows = self.authenticated_client(session).daily_executions("2026-09-01")
+
+        self.assertEqual(rows[0]["avg_prvs"], "71200")
+        self.assertNotIn("CANO", rows[0])
+        call = session.get.call_args
+        self.assertTrue(call.args[0].endswith("/trading/inquire-daily-ccld"))
+        self.assertEqual(call.kwargs["headers"]["tr_id"], "VTTC0081R")
+        self.assertEqual(call.kwargs["params"]["CCLD_DVSN"], "01")
 
     def test_empty_optional_environment_values_use_safe_defaults(self):
         environment = {

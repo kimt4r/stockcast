@@ -138,20 +138,50 @@ class KISClient:
         return int(data["output"]["stck_prpr"])
 
     def daily_prices(self, symbol: str, period: str = "D") -> list[int]:
+        end = date.today()
+        start = end - timedelta(days=120)
         data = self._get(
-            "/uapi/domestic-stock/v1/quotations/inquire-daily-price",
-            "FHKST01010400",
+            "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
+            "FHKST03010100",
             {
                 "FID_COND_MRKT_DIV_CODE": "J",
                 "FID_INPUT_ISCD": symbol,
+                "FID_INPUT_DATE_1": start.strftime("%Y%m%d"),
+                "FID_INPUT_DATE_2": end.strftime("%Y%m%d"),
                 "FID_PERIOD_DIV_CODE": period,
                 "FID_ORG_ADJ_PRC": "1",
             },
         )
-        rows = data.get("output", [])
+        rows = data.get("output2", [])
         return [int(row["stck_clpr"]) for row in reversed(rows) if row.get("stck_clpr")]
 
-    def volume_rank(self, *, limit: int = 10) -> list[dict[str, Any]]:
+    def intraday_bars(self, symbol: str) -> list[dict[str, int | str]]:
+        now_kst = datetime.now(timezone(timedelta(hours=9)))
+        data = self._get(
+            "/uapi/domestic-stock/v1/quotations/inquire-time-itemchartprice",
+            "FHKST03010200",
+            {
+                "FID_COND_MRKT_DIV_CODE": "J",
+                "FID_INPUT_ISCD": symbol,
+                "FID_INPUT_HOUR_1": now_kst.strftime("%H%M%S"),
+                "FID_PW_DATA_INCU_YN": "Y",
+                "FID_ETC_CLS_CODE": "",
+            },
+        )
+        rows = sorted(data.get("output2") or [], key=lambda row: row.get("stck_cntg_hour", ""))
+        return [
+            {
+                "time": str(row.get("stck_cntg_hour") or ""),
+                "price": int(row.get("stck_prpr") or 0),
+                "volume": int(row.get("cntg_vol") or 0),
+            }
+            for row in rows if row.get("stck_prpr")
+        ]
+
+    def intraday_prices(self, symbol: str) -> list[int]:
+        return [int(bar["price"]) for bar in self.intraday_bars(symbol)]
+
+    def volume_rank(self, *, limit: int = 10, division: str = "1") -> list[dict[str, Any]]:
         data = self._get(
             "/uapi/domestic-stock/v1/quotations/volume-rank",
             "FHPST01710000",
@@ -159,7 +189,7 @@ class KISClient:
                 "FID_COND_MRKT_DIV_CODE": "J",
                 "FID_COND_SCR_DIV_CODE": "20171",
                 "FID_INPUT_ISCD": "0000",
-                "FID_DIV_CLS_CODE": "1",
+                "FID_DIV_CLS_CODE": division,
                 "FID_BLNG_CLS_CODE": "3",
                 "FID_TRGT_CLS_CODE": "111111111",
                 "FID_TRGT_EXLS_CLS_CODE": "0000000000",
@@ -170,6 +200,25 @@ class KISClient:
             },
         )
         return (data.get("output") or [])[:max(1, min(limit, 30))]
+
+    def daytrade_rank(self, *, limit: int = 10) -> list[dict[str, Any]]:
+        ordinary = self.volume_rank(limit=min(limit, 30), division="1")
+        etf_prefixes = (
+            "ACE ", "ARIRANG ", "HANARO ", "KODEX ", "KOSEF ", "PLUS ",
+            "RISE ", "SOL ", "TIGER ", "TIMEFOLIO ",
+        )
+        unique: dict[str, dict[str, Any]] = {}
+        for row in ordinary:
+            symbol = str(row.get("mksc_shrn_iscd") or row.get("stck_shrn_iscd") or "")
+            name = str(row.get("hts_kor_isnm") or "").upper()
+            if symbol and not name.startswith(etf_prefixes):
+                unique[symbol] = row
+        ranked = sorted(
+            unique.values(),
+            key=lambda row: int(row.get("acml_tr_pbmn") or 0),
+            reverse=True,
+        )
+        return ranked[:max(1, min(limit, 20))]
 
     def balance(self) -> dict[str, Any]:
         tr_id = "VTTC8434R" if self.settings.environment == "paper" else "TTTC8434R"
@@ -208,6 +257,40 @@ class KISClient:
             params["CTX_AREA_NK100"] = next_nk
 
         return {"output1": holdings, "output2": summary}
+
+    def daily_executions(self, date: str) -> list[dict[str, Any]]:
+        """Return today's order/fill rows for reporting without account identifiers."""
+        compact_date = date.replace("-", "")
+        tr_id = "VTTC0081R" if self.settings.environment == "paper" else "TTTC0081R"
+        data = self._get(
+            "/uapi/domestic-stock/v1/trading/inquire-daily-ccld",
+            tr_id,
+            {
+                "CANO": self.settings.account_no,
+                "ACNT_PRDT_CD": self.settings.product_code,
+                "INQR_STRT_DT": compact_date,
+                "INQR_END_DT": compact_date,
+                "SLL_BUY_DVSN_CD": "00",
+                "PDNO": "",
+                "CCLD_DVSN": "01",
+                "INQR_DVSN": "01",
+                "INQR_DVSN_3": "00",
+                "ORD_GNO_BRNO": "",
+                "ODNO": "",
+                "INQR_DVSN_1": "",
+                "CTX_AREA_FK100": "",
+                "CTX_AREA_NK100": "",
+            },
+        )
+        fields = (
+            "ord_dt", "ord_tmd", "odno", "pdno", "prdt_name",
+            "sll_buy_dvsn_cd_name", "ord_qty", "tot_ccld_qty",
+            "avg_prvs", "tot_ccld_amt", "rmn_qty",
+        )
+        return [
+            {field: row.get(field, "") for field in fields}
+            for row in (data.get("output1") or [])
+        ]
 
     def order(self, request: OrderRequest) -> dict[str, Any]:
         self._validate_order(request)

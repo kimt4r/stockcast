@@ -50,7 +50,7 @@
     <section class="panel autotrade-panel">
       <div class="panel-heading"><div><span>PAPER AUTOPILOT</span><h2>모의투자 자동매매</h2></div><span id="autotrade-state" class="pill">중지됨</span></div>
       {% if environment == 'paper' %}
-      <label class="auto-discover-toggle"><input id="auto-discover" type="checkbox" checked><span><b>시장 자동 검색</b><small>거래금액 상위 종목을 불러와 추세 점수가 높은 종목을 자동 선택</small></span></label>
+      <label class="auto-discover-toggle"><input id="auto-discover" type="checkbox" checked><span><b>데이트레이딩 자동 검색</b><small>ETF를 제외한 거래금액 상위 개별 종목에서 장중 추세 종목을 선택</small></span></label>
       <div class="auto-search-layout">
       <aside class="discovery-panel">
         <div class="discovery-heading"><div><b>자동검색 종목</b><small>선택하면 상단 차트와 연동됩니다.</small></div><button id="refresh-discovery" class="outline-button">검색</button></div>
@@ -62,25 +62,48 @@
         <label class="field wide"><span>직접 후보 종목 <small>(자동 검색 해제 시 사용)</small></span><input id="auto-symbols" value="{{ allowed_symbols|join(',') }}" placeholder="005930,000660"></label>
         <label class="field"><span>1차 검색 수</span><input id="auto-scan-limit" type="number" min="1" max="20" value="10"></label>
         <label class="field"><span>최종 선택 수</span><input id="auto-select-count" type="number" min="1" max="10" value="3"></label>
-        <label class="field"><span>종목당 수량</span><input id="auto-quantity" type="number" min="1" value="1"></label>
+        <label class="field"><span>종목당 투자 비중(%)</span><input id="auto-position-size" type="number" min="0.1" max="100" step="0.1" value="10"></label>
         <label class="field"><span>실행 주기(초)</span><input id="auto-interval" type="number" min="60" value="120"></label>
         <label class="field"><span>최대 보유 종목</span><input id="auto-max-positions" type="number" min="1" value="3"></label>
         <label class="field"><span>손절률(%)</span><input id="auto-stop-loss" type="number" min="0.1" max="20" step="0.1" value="3"></label>
         <label class="field"><span>익절률(%)</span><input id="auto-take-profit" type="number" min="0.1" max="50" step="0.1" value="5"></label>
+        <label class="field"><span>일일 목표 수익률(%)</span><input id="auto-daily-target" type="number" min="0.1" max="20" step="0.1" value="10"></label>
+        <label class="field"><span>일일 손실 한도(%)</span><input id="auto-daily-loss-limit" type="number" min="0.1" max="10" step="0.1" value="3"></label>
+        <label class="field"><span>재진입 대기(분)</span><input id="auto-reentry-cooldown" type="number" min="1" value="30"></label>
+        <label class="field"><span>종목별 최대 진입</span><input id="auto-max-entries" type="number" min="1" value="2"></label>
+        <label class="field"><span>일일 최대 왕복거래</span><input id="auto-max-round-trips" type="number" min="1" value="10"></label>
+        <label class="field"><span>최소 돌파율(%)</span><input id="auto-min-breakout" type="number" min="0" max="5" step="0.1" value="0.2"></label>
+        <label class="field"><span>매도 확인 봉 수</span><input id="auto-exit-confirmation" type="number" min="1" value="2"></label>
+        <label class="field"><span>수익보존 시작(%)</span><input id="auto-profit-lock-activation" type="number" min="0.1" max="20" step="0.1" value="1"></label>
+        <label class="field"><span>최고수익 반납 한도(%p)</span><input id="auto-profit-giveback" type="number" min="0.1" max="10" step="0.1" value="0.5"></label>
+        <label class="field"><span>최소 상대 거래량(배)</span><input id="auto-relative-volume" type="number" min="0.1" max="10" step="0.1" value="1.5"></label>
+        <label class="field"><span>추적매도 시작(%)</span><input id="auto-trailing-activation" type="number" min="0.1" max="20" step="0.1" value="2"></label>
+        <label class="field"><span>고점 하락폭(%)</span><input id="auto-trailing-drawdown" type="number" min="0.1" max="10" step="0.1" value="0.7"></label>
+        <label class="field"><span>본전보호 시작(%)</span><input id="auto-breakeven-activation" type="number" min="0.1" max="20" step="0.1" value="1"></label>
+        <label class="field"><span>본전보호 하한(%)</span><input id="auto-breakeven-floor" type="number" min="0" max="5" step="0.1" value="0.1"></label>
       </div>
       <div class="autotrade-actions"><button id="start-autotrade" class="primary-button">자동매매 시작</button><button id="stop-autotrade" class="danger-button">즉시 중지</button></div>
-      <p class="autotrade-warning">모의투자 주문만 전송합니다. 수익을 보장하지 않으며 장 운영시간에만 매매합니다.</p>
+      <p class="autotrade-warning">모의투자 주문만 전송합니다. 09:10 이후 진입하고 14:50부터 신규 매수를 멈추며 15:15에 봇 보유분을 전량 청산합니다.</p>
+      <div class="daily-report" aria-live="polite">
+        <div><span>오늘 수익률</span><strong id="daily-return">계산 전</strong></div>
+        <div><span>목표 진행</span><strong id="daily-target-progress">0 / 10%</strong></div>
+        <div><span>오늘 주문</span><strong id="daily-order-count">0건</strong></div>
+        <small id="daily-report-path">첫 잔고 조회 후 일일 리포트가 생성됩니다.</small>
+      </div>
       </div>
       </div>
       <details class="strategy-details">
         <summary><span>현재 매매기준 보기</span><b>+</b></summary>
         <div class="strategy-rules">
-          <article><span>01 · 시장 검색</span><h3>거래금액 상위 종목 자동 수집</h3><p>KIS 국내주식 순위 API에서 유동성 후보를 가져오고 가격·거래량 기본 조건으로 1차 범위를 좁힙니다.</p></article>
-          <article><span>02 · 점수와 매수</span><h3>추세 점수 상위 종목 진입</h3><p>5일·20일 이동평균 격차, 최근 상승률과 거래금액 순위를 합산해 점수가 높은 미보유 종목을 매수합니다.</p></article>
-          <article><span>03 · 매도</span><h3>추세 하락 또는 목표 도달</h3><p>5일 이동평균이 20일 이동평균 아래로 내려가거나 설정한 손절률·익절률에 도달하면 매도합니다.</p></article>
-          <article><span>04 · 위험 제한</span><h3>수량과 보유 종목 수 제한</h3><p>종목당 수량, 최대 보유 종목 수, 주문 허용 종목과 1회 최대 주문금액을 모두 통과해야 주문합니다.</p></article>
-          <article><span>05 · 운영시간</span><h3>평일 09:00–15:20</h3><p>한국시간 장 운영 구간에만 주문하며 장외 시간에는 판단 기록만 남기고 대기합니다.</p></article>
-          <article><span>06 · 실행 범위</span><h3>모의투자 전용</h3><p>현재 자동매매 엔진은 실전 계좌에서 시작할 수 없으며 프로그램 종료 또는 즉시 중지 시 멈춥니다.</p></article>
+          <article><span>01 · 시장 검색</span><h3>개별 종목 전용</h3><p>거래금액 상위 보통주만 후보로 사용하며 KODEX·TIGER 등 일반·레버리지·인버스 ETF는 모두 제외합니다.</p></article>
+          <article><span>02 · 장중 매수</span><h3>추세·유효 돌파·재진입 제한</h3><p>단기 이동평균이 장기 이동평균보다 높고 직전 고가를 최소 돌파율 이상 넘은 종목만 매수합니다. 매도 후에는 설정 시간만큼 재진입을 기다립니다.</p></article>
+          <article><span>03 · 장중 매도</span><h3>연속 추세 이탈·손절·익절</h3><p>가격이 단기 이동평균 아래에서 설정한 봉 수만큼 연속 확인되거나 손절률·익절률에 도달하면 매도합니다.</p></article>
+          <article><span>04 · 위험 제한</span><h3>총자산 비중과 보유 종목 수 제한</h3><p>최신 총평가금액에 종목당 투자 비중을 적용해 수량을 계산하며, 1회 최대 주문금액과 최대 보유 종목 수도 함께 제한합니다.</p></article>
+          <article><span>05 · 당일 청산</span><h3>15:15 봇 보유분 전량 매도</h3><p>당일 자동매매가 매수한 포지션만 마감 전에 전량 청산해 익일로 넘기지 않습니다.</p></article>
+          <article><span>06 · 실행 범위</span><h3>모의투자 전용</h3><p>실전 계좌에서는 시작할 수 없으며 프로그램 종료 시 청산을 보장할 수 없으므로 장중 계속 실행해야 합니다.</p></article>
+          <article><span>07 · 일일 목표와 리포트</span><h3>10% 도달 시 신규 매수 중단</h3><p>목표의 절반에 도달하거나 당일 수익률이 음수이면 종목당 투자 예산을 절반으로 줄입니다. 손실 한도 도달 시 봇 보유분을 청산하며 계좌 평가금액 기준 리포트를 저장합니다.</p></article>
+          <article><span>08 · 과매매와 수익 보존</span><h3>거래 횟수 제한·수익 반납 차단</h3><p>종목별 진입과 일일 왕복 거래 횟수를 제한합니다. 수익보존 기준 도달 후 최고 수익률에서 허용폭 이상 내려가면 신규 매수를 중단합니다.</p></article>
+          <article><span>09 · 거래량·VWAP·추적매도</span><h3>강한 돌파만 사고 수익을 따라감</h3><p>완료된 최근 분봉 대비 거래량이 충분하고 현재가가 장중 거래량가중평균가 위인 경우만 진입합니다. 수익 발생 후에는 고점 하락폭과 본전보호 기준으로 청산합니다.</p></article>
         </div>
         <p class="strategy-disclaimer">이 기준은 수익을 보장하지 않습니다. 충분한 모의투자 결과를 확인한 뒤 조건을 조정하세요.</p>
       </details>

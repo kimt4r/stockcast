@@ -106,6 +106,11 @@ function renderAutotrade(status) {
   state.className = `pill ${status.running ? 'running' : ''}`;
   if ($('#start-autotrade')) $('#start-autotrade').disabled = status.running;
   if ($('#stop-autotrade')) $('#stop-autotrade').disabled = !status.running;
+  const daily = status.daily_performance || {};
+  if ($('#daily-return')) $('#daily-return').textContent = daily.return_pct == null ? '계산 전' : `${Number(daily.return_pct).toFixed(2)}%`;
+  if ($('#daily-target-progress')) $('#daily-target-progress').textContent = `${Number(daily.return_pct || 0).toFixed(2)} / ${Number(daily.target_pct || 10).toFixed(1)}%`;
+  if ($('#daily-order-count')) $('#daily-order-count').textContent = `${Number(daily.order_count || 0)}건`;
+  if ($('#daily-report-path')) $('#daily-report-path').textContent = daily.report_path ? `리포트: ${daily.report_path}` : '첫 잔고 조회 후 일일 리포트가 생성됩니다.';
   const events = status.events || [];
   if ($('#autotrade-events')) {
     $('#autotrade-events').replaceChildren(...(events.length ? events.map(event => {
@@ -145,7 +150,7 @@ async function loadDiscovery() {
 }
 $('#refresh-discovery')?.addEventListener('click',loadDiscovery);
 $('#start-autotrade')?.addEventListener('click', async () => {
-  const payload={symbols:$('#auto-symbols').value,auto_discover:$('#auto-discover').checked,scan_limit:Number($('#auto-scan-limit').value),select_count:Number($('#auto-select-count').value),quantity:Number($('#auto-quantity').value),interval_seconds:Number($('#auto-interval').value),max_positions:Number($('#auto-max-positions').value),stop_loss_pct:Number($('#auto-stop-loss').value),take_profit_pct:Number($('#auto-take-profit').value)};
+  const payload={symbols:$('#auto-symbols').value,auto_discover:$('#auto-discover').checked,scan_limit:Number($('#auto-scan-limit').value),select_count:Number($('#auto-select-count').value),position_size_pct:Number($('#auto-position-size').value),interval_seconds:Number($('#auto-interval').value),max_positions:Number($('#auto-max-positions').value),stop_loss_pct:Number($('#auto-stop-loss').value),take_profit_pct:Number($('#auto-take-profit').value),daily_target_pct:Number($('#auto-daily-target').value),daily_loss_limit_pct:Number($('#auto-daily-loss-limit').value),reentry_cooldown_minutes:Number($('#auto-reentry-cooldown').value),max_entries_per_symbol:Number($('#auto-max-entries').value),max_daily_round_trips:Number($('#auto-max-round-trips').value),min_breakout_pct:Number($('#auto-min-breakout').value),exit_confirmation_bars:Number($('#auto-exit-confirmation').value),profit_lock_activation_pct:Number($('#auto-profit-lock-activation').value),profit_giveback_pct:Number($('#auto-profit-giveback').value),min_relative_volume:Number($('#auto-relative-volume').value),trailing_activation_pct:Number($('#auto-trailing-activation').value),trailing_drawdown_pct:Number($('#auto-trailing-drawdown').value),breakeven_activation_pct:Number($('#auto-breakeven-activation').value),breakeven_floor_pct:Number($('#auto-breakeven-floor').value)};
   try { clearError();renderAutotrade(await api('/api/autotrade/start',{method:'POST',body:JSON.stringify(payload)}));toast('모의투자 자동매매를 시작했습니다.'); }
   catch(e){showError(`자동매매 시작 실패: ${e.message}`)}
 });

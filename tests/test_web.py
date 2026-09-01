@@ -82,7 +82,7 @@ class WebAppTests(unittest.TestCase):
 
     def test_discovery_returns_name_symbol_and_price(self):
         kis = Mock()
-        kis.volume_rank.return_value = [{
+        kis.daytrade_rank.return_value = [{
             "hts_kor_isnm": "삼성전자",
             "mksc_shrn_iscd": "005930",
             "stck_prpr": "71200",
@@ -99,7 +99,7 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.get_json()["items"][0], {
             "name": "삼성전자", "symbol": "005930", "price": 71200, "change_rate": 1.25,
         })
-        kis.volume_rank.assert_called_once_with(limit=7)
+        kis.daytrade_rank.assert_called_once_with(limit=7)
 
     def test_logout_clears_connection(self):
         kis = Mock()
