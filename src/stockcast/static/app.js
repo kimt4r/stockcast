@@ -110,7 +110,7 @@ function renderAutotrade(status) {
   if ($('#daily-return')) $('#daily-return').textContent = daily.return_pct == null ? '계산 전' : `${Number(daily.return_pct).toFixed(2)}%`;
   if ($('#daily-target-progress')) $('#daily-target-progress').textContent = `${Number(daily.return_pct || 0).toFixed(2)} / ${Number(daily.target_pct || 10).toFixed(1)}%`;
   if ($('#daily-order-count')) $('#daily-order-count').textContent = `${Number(daily.order_count || 0)}건`;
-  if ($('#daily-report-path')) $('#daily-report-path').textContent = daily.report_path ? `리포트: ${daily.report_path}` : '첫 잔고 조회 후 일일 리포트가 생성됩니다.';
+  if ($('#daily-report-path')) $('#daily-report-path').textContent = daily.journal_path ? `매매일지: ${daily.journal_path}` : (daily.report_path ? `상태 파일: ${daily.report_path}` : '첫 잔고 조회 후 일일 리포트가 생성됩니다.');
   const events = status.events || [];
   if ($('#autotrade-events')) {
     $('#autotrade-events').replaceChildren(...(events.length ? events.map(event => {

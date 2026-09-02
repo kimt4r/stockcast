@@ -32,6 +32,7 @@ class AutoTraderTests(unittest.TestCase):
         client.settings = Settings("key", "secret", "12345678", environment="paper")
         client.balance.return_value = {"output1": [], "output2": [{"tot_evlu_amt": "1000"}]}
         client.intraday_bars.return_value = intraday_bars(list(range(1, 31)))
+        client.order.return_value = {"output": {"ODNO": "12345"}}
         trader = AutoTrader(client, self.report_dir)
         trader._config = AutoTradeConfig(
             ("005930",), auto_discover=False, position_size_pct=6,
@@ -42,6 +43,7 @@ class AutoTraderTests(unittest.TestCase):
 
         order = client.order.call_args.args[0]
         self.assertEqual((order.symbol, order.side, order.quantity), ("005930", "buy", 2))
+        self.assertEqual(trader._daily_orders[-1]["order_id"], "12345")
 
     def test_sells_at_stop_loss(self):
         client = Mock()
@@ -159,11 +161,72 @@ class AutoTraderTests(unittest.TestCase):
             trader.run_once()
             report_path = Path(trader.status()["daily_performance"]["report_path"])
             report = json.loads(report_path.read_text(encoding="utf-8"))
+            journal_path = Path(trader.status()["daily_performance"]["journal_path"])
+            journal_text = journal_path.read_text(encoding="utf-8")
 
         self.assertEqual(report["starting_equity"], 1_000_000)
         self.assertEqual(report["return_pct"], 0.0)
         self.assertEqual(report["target_pct"], 10.0)
         self.assertIn("총평가금액", report["measurement"])
+        self.assertIn("journal", report)
+        self.assertEqual(report["telemetry"]["run_count"], 1)
+        self.assertIn("## 문제점", journal_text)
+        self.assertIn("주문이 한 건도 없었습니다", journal_text)
+
+    def test_execution_analysis_matches_strategy_order_number(self):
+        client = Mock()
+        client.settings = Settings("key", "secret", "12345678", environment="paper")
+        trader = AutoTrader(client, self.report_dir)
+        trader._daily_orders = [
+            {"order_id": "100", "symbol": "005930", "side": "buy", "quantity": 2},
+            {"order_id": "101", "symbol": "005930", "side": "sell", "quantity": 2},
+        ]
+        trader._executions = [
+            {
+                "ord_dt": "20260902", "ord_tmd": "100000", "odno": "100",
+                "pdno": "005930", "prdt_name": "삼성전자",
+                "sll_buy_dvsn_cd_name": "매수", "tot_ccld_qty": "2",
+                "avg_prvs": "70000", "rmn_qty": "0",
+            },
+            {
+                "ord_dt": "20260902", "ord_tmd": "110000", "odno": "101",
+                "pdno": "005930", "prdt_name": "삼성전자",
+                "sll_buy_dvsn_cd_name": "매도", "tot_ccld_qty": "2",
+                "avg_prvs": "71000", "rmn_qty": "0",
+            },
+            {
+                "ord_dt": "20260902", "ord_tmd": "120000", "odno": "manual",
+                "pdno": "000660", "sll_buy_dvsn_cd_name": "매수",
+                "tot_ccld_qty": "1", "avg_prvs": "100000", "rmn_qty": "0",
+            },
+        ]
+
+        analysis = trader._execution_analysis()
+
+        self.assertEqual(analysis["account_execution_rows"], 3)
+        self.assertEqual(analysis["strategy_execution_rows"], 2)
+        self.assertEqual(analysis["unconfirmed_order_count"], 0)
+        self.assertEqual(analysis["fill_rate_pct"], 100.0)
+        self.assertEqual(analysis["gross_realized_pnl_krw"], 2_000)
+        self.assertEqual(analysis["wins"], 1)
+
+    def test_no_trade_report_records_precise_decision_blocks(self):
+        client = Mock()
+        client.settings = Settings("key", "secret", "12345678", environment="paper")
+        client.balance.return_value = {
+            "output1": [], "output2": [{"tot_evlu_amt": "1000000"}],
+        }
+        client.intraday_bars.return_value = intraday_bars([100] * 30)
+        trader = AutoTrader(client, self.report_dir)
+        trader._config = AutoTradeConfig(("005930",), auto_discover=False)
+
+        with patch.object(trader, "_entry_is_open", return_value=False):
+            trader.run_once()
+
+        report_path = Path(trader.status()["daily_performance"]["report_path"])
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertGreater(report["telemetry"]["decision_counts"]["outside_entry_window"], 0)
+        self.assertGreater(report["telemetry"]["decision_counts"]["no_buy_signal"], 0)
 
     def test_reentry_is_blocked_during_cooldown_and_after_daily_limit(self):
         client = Mock()
