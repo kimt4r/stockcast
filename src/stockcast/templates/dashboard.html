@@ -50,7 +50,7 @@
     <section class="panel autotrade-panel">
       <div class="panel-heading"><div><span>PAPER AUTOPILOT</span><h2>모의투자 자동매매</h2></div><span id="autotrade-state" class="pill">중지됨</span></div>
       {% if environment == 'paper' %}
-      <label class="auto-discover-toggle"><input id="auto-discover" type="checkbox" checked><span><b>데이트레이딩 자동 검색</b><small>ETF를 제외한 거래금액 상위 개별 종목에서 장중 추세 종목을 선택</small></span></label>
+      <label class="auto-discover-toggle"><input id="auto-discover" type="checkbox" checked><span><b>데이트레이딩 자동 검색</b><small>거래금액 상위 보통주와 인버스 ETF에서 장중 추세 종목을 선택</small></span></label>
       <div class="auto-search-layout">
       <aside class="discovery-panel">
         <div class="discovery-heading"><div><b>자동검색 종목</b><small>선택하면 상단 차트와 연동됩니다.</small></div><button id="refresh-discovery" class="outline-button">검색</button></div>
@@ -63,30 +63,39 @@
         <label class="field"><span>1차 검색 수</span><input id="auto-scan-limit" type="number" min="1" max="20" value="10"></label>
         <label class="field"><span>최종 선택 수</span><input id="auto-select-count" type="number" min="1" max="10" value="3"></label>
         <label class="field"><span>종목당 투자 비중(%)</span><input id="auto-position-size" type="number" min="0.1" max="100" step="0.1" value="10"></label>
-        <label class="field"><span>실행 주기(초)</span><input id="auto-interval" type="number" min="60" value="120"></label>
+        <label class="field"><span>실행 주기(초)</span><input id="auto-interval" type="number" min="60" value="60"></label>
         <label class="field"><span>최대 보유 종목</span><input id="auto-max-positions" type="number" min="1" value="3"></label>
-        <label class="field"><span>손절률(%)</span><input id="auto-stop-loss" type="number" min="0.1" max="20" step="0.1" value="3"></label>
-        <label class="field"><span>익절률(%)</span><input id="auto-take-profit" type="number" min="0.1" max="50" step="0.1" value="5"></label>
-        <label class="field"><span>일일 목표 수익률(%)</span><input id="auto-daily-target" type="number" min="0.1" max="20" step="0.1" value="10"></label>
+        <label class="field"><span>추세 판단 분봉</span><input id="auto-signal-bar-minutes" type="number" min="1" max="15" value="3"></label>
+        <label class="field"><span>스윙 구조 기간(봉)</span><input id="auto-swing-lookback" type="number" min="2" value="2"></label>
+        <label class="field"><span>EMA 기간(봉)</span><input id="auto-ema-period" type="number" min="2" value="7"></label>
+        <label class="field"><span>ATR 기간(봉)</span><input id="auto-atr-period" type="number" min="2" value="5"></label>
+        <label class="field"><span>횡보 판단 기간(봉)</span><input id="auto-chop-lookback" type="number" min="2" value="4"></label>
+        <label class="field"><span>최소 범위/ATR(배)</span><input id="auto-min-range-atr" type="number" min="0.1" max="20" step="0.1" value="2"></label>
+        <label class="field"><span>전환 후 최소 확인(봉)</span><input id="auto-min-structure-age" type="number" min="0" max="60" value="1"></label>
+        <label class="field"><span>상승 전환 신선도(봉)</span><input id="auto-max-structure-age" type="number" min="1" max="60" value="5"></label>
+        <label class="field"><span>최소 VWAP 이격(ATR)</span><input id="auto-min-anchor-distance" type="number" min="0" max="20" step="0.1" value="0.2"></label>
+        <label class="field"><span>최대 VWAP 이격(ATR)</span><input id="auto-max-anchor-distance" type="number" min="0.1" max="20" step="0.1" value="1.5"></label>
+        <label class="field"><span>최소 EMA 기울기(ATR)</span><input id="auto-min-ema-slope" type="number" min="0" max="5" step="0.01" value="0"></label>
+        <label class="field"><span>재난 스톱 ATR(배)</span><input id="auto-catastrophe-atr" type="number" min="1" max="20" step="0.1" value="4"></label>
+        <label class="field"><span>EMA 필터</span><input id="auto-use-ema" type="checkbox" checked></label>
+        <label class="field"><span>ATR 횡보 필터</span><input id="auto-use-chop" type="checkbox" checked></label>
         <label class="field"><span>일일 손실 한도(%)</span><input id="auto-daily-loss-limit" type="number" min="0.1" max="10" step="0.1" value="3"></label>
         <label class="field"><span>재진입 대기(분)</span><input id="auto-reentry-cooldown" type="number" min="1" value="30"></label>
         <label class="field"><span>종목별 최대 진입</span><input id="auto-max-entries" type="number" min="1" value="2"></label>
-        <label class="field"><span>일일 최대 왕복거래</span><input id="auto-max-round-trips" type="number" min="1" value="10"></label>
-        <label class="field"><span>최소 돌파율(%)</span><input id="auto-min-breakout" type="number" min="0" max="5" step="0.1" value="0.2"></label>
-        <label class="field"><span>매도 확인 봉 수</span><input id="auto-exit-confirmation" type="number" min="1" value="2"></label>
+        <label class="field"><span>전체 종목 합산 왕복거래 슬롯</span><input id="auto-max-round-trips" type="number" min="1" value="20"><small>완료 거래와 보유 포지션의 향후 청산을 합산</small></label>
         <label class="field"><span>수익보존 시작(%)</span><input id="auto-profit-lock-activation" type="number" min="0.1" max="20" step="0.1" value="1"></label>
         <label class="field"><span>최고수익 반납 한도(%p)</span><input id="auto-profit-giveback" type="number" min="0.1" max="10" step="0.1" value="0.5"></label>
-        <label class="field"><span>최소 상대 거래량(배)</span><input id="auto-relative-volume" type="number" min="0.1" max="10" step="0.1" value="1.5"></label>
-        <label class="field"><span>추적매도 시작(%)</span><input id="auto-trailing-activation" type="number" min="0.1" max="20" step="0.1" value="2"></label>
-        <label class="field"><span>고점 하락폭(%)</span><input id="auto-trailing-drawdown" type="number" min="0.1" max="10" step="0.1" value="0.7"></label>
-        <label class="field"><span>본전보호 시작(%)</span><input id="auto-breakeven-activation" type="number" min="0.1" max="20" step="0.1" value="1"></label>
-        <label class="field"><span>본전보호 하한(%)</span><input id="auto-breakeven-floor" type="number" min="0" max="5" step="0.1" value="0.1"></label>
+        <label class="field"><span>종목 수익보호 시작(%)</span><input id="auto-profit-protection-pct" type="number" min="0.1" max="20" step="0.1" value="1"></label>
+        <label class="field"><span>수익보호 시작 ATR(배)</span><input id="auto-profit-protection-atr" type="number" min="0.1" max="20" step="0.1" value="2"></label>
+        <label class="field"><span>수익 추적 ATR(배)</span><input id="auto-profit-trailing-atr" type="number" min="0.1" max="20" step="0.1" value="1.5"></label>
+        <label class="field"><span>최소 추적 간격(%)</span><input id="auto-profit-trailing-min-pct" type="number" min="0.1" max="10" step="0.1" value="0.5"></label>
+        <label class="field"><span>활성화 후 수익 바닥(%)</span><input id="auto-profit-floor-pct" type="number" min="0" max="5" step="0.1" value="0.2"></label>
+        <label class="field"><span>수익보호 확인(완료 1분봉)</span><input id="auto-profit-confirm-bars" type="number" min="1" max="5" value="2"></label>
       </div>
       <div class="autotrade-actions"><button id="start-autotrade" class="primary-button">자동매매 시작</button><button id="stop-autotrade" class="danger-button">즉시 중지</button></div>
       <p class="autotrade-warning">모의투자 주문만 전송합니다. 09:10 이후 진입하고 14:50부터 신규 매수를 멈추며 15:15에 봇 보유분을 전량 청산합니다.</p>
       <div class="daily-report" aria-live="polite">
         <div><span>오늘 수익률</span><strong id="daily-return">계산 전</strong></div>
-        <div><span>목표 진행</span><strong id="daily-target-progress">0 / 10%</strong></div>
         <div><span>오늘 주문</span><strong id="daily-order-count">0건</strong></div>
         <small id="daily-report-path">첫 잔고 조회 후 일일 리포트가 생성됩니다.</small>
       </div>
@@ -95,15 +104,15 @@
       <details class="strategy-details">
         <summary><span>현재 매매기준 보기</span><b>+</b></summary>
         <div class="strategy-rules">
-          <article><span>01 · 시장 검색</span><h3>개별 종목 전용</h3><p>거래금액 상위 보통주만 후보로 사용하며 KODEX·TIGER 등 일반·레버리지·인버스 ETF는 모두 제외합니다.</p></article>
-          <article><span>02 · 장중 매수</span><h3>추세·유효 돌파·재진입 제한</h3><p>단기 이동평균이 장기 이동평균보다 높고 직전 고가를 최소 돌파율 이상 넘은 종목만 매수합니다. 매도 후에는 설정 시간만큼 재진입을 기다립니다.</p></article>
-          <article><span>03 · 장중 매도</span><h3>연속 추세 이탈·손절·익절</h3><p>가격이 단기 이동평균 아래에서 설정한 봉 수만큼 연속 확인되거나 손절률·익절률에 도달하면 매도합니다.</p></article>
+          <article><span>01 · 시장 검색</span><h3>보통주·인버스 ETF</h3><p>거래금액 상위 보통주와 인버스 ETF를 후보로 사용하며 일반 ETF, 레버리지 ETF와 ETN은 제외합니다.</p></article>
+          <article><span>02 · 장중 매수</span><h3>Golden Trident 상승 구조</h3><p>상승 전환 봉을 바로 추격하지 않고 전환 후 1~5봉이며 앵커 VWAP 이격이 0.2~1.5 ATR인 구간을 우선합니다. 가격이 상승 EMA 위에 있고 ATR 횡보 필터를 통과할 때만 매수합니다.</p></article>
+          <article><span>03 · 혼합 분봉</span><h3>완료 3분봉 추세·1분봉 수익보호</h3><p>진입과 구조 반전은 진행 중인 봉을 제외한 완료 3분봉으로 판단합니다. 수익이 1%와 2 ATR 기준을 모두 넘으면 보호선을 올리고, 완료 1분봉 2개가 이 선 아래면 청산합니다. 재난 스톱은 현재가로 즉시 확인합니다.</p></article>
           <article><span>04 · 위험 제한</span><h3>총자산 비중과 보유 종목 수 제한</h3><p>최신 총평가금액에 종목당 투자 비중을 적용해 수량을 계산하며, 1회 최대 주문금액과 최대 보유 종목 수도 함께 제한합니다.</p></article>
           <article><span>05 · 당일 청산</span><h3>15:15 봇 보유분 전량 매도</h3><p>당일 자동매매가 매수한 포지션만 마감 전에 전량 청산해 익일로 넘기지 않습니다.</p></article>
           <article><span>06 · 실행 범위</span><h3>모의투자 전용</h3><p>실전 계좌에서는 시작할 수 없으며 프로그램 종료 시 청산을 보장할 수 없으므로 장중 계속 실행해야 합니다.</p></article>
-          <article><span>07 · 일일 목표와 리포트</span><h3>10% 도달 시 신규 매수 중단</h3><p>목표의 절반에 도달하거나 당일 수익률이 음수이면 종목당 투자 예산을 절반으로 줄입니다. 손실 한도 도달 시 봇 보유분을 청산하며 계좌 평가금액 기준 리포트를 저장합니다.</p></article>
-          <article><span>08 · 과매매와 수익 보존</span><h3>거래 횟수 제한·수익 반납 차단</h3><p>종목별 진입과 일일 왕복 거래 횟수를 제한합니다. 수익보존 기준 도달 후 최고 수익률에서 허용폭 이상 내려가면 신규 매수를 중단합니다.</p></article>
-          <article><span>09 · 거래량·VWAP·추적매도</span><h3>강한 돌파만 사고 수익을 따라감</h3><p>완료된 최근 분봉 대비 거래량이 충분하고 현재가가 장중 거래량가중평균가 위인 경우만 진입합니다. 수익 발생 후에는 고점 하락폭과 본전보호 기준으로 청산합니다.</p></article>
+          <article><span>07 · 손실 한도와 리포트</span><h3>손실 한도 도달 시 청산</h3><p>당일 수익률이 음수이면 종목당 투자 예산을 절반으로 줄입니다. 손실 한도 도달 시 봇 보유분을 청산하며 계좌 평가금액 기준 리포트를 저장합니다.</p></article>
+          <article><span>08 · 과매매와 수익 보존</span><h3>전체 거래 슬롯·수익 반납 차단</h3><p>완료 왕복거래와 현재 보유 포지션의 향후 청산을 합산해 전체 종목 거래 슬롯을 제한합니다. 수익보존 기준 도달 후 최고 수익률에서 허용폭 이상 내려가면 신규 매수를 중단합니다.</p></article>
+          <article><span>09 · 앵커 VWAP·EMA·ATR</span><h3>구조 기준 공정가와 횡보 회피</h3><p>구조가 바뀔 때마다 거래량가중평균가를 새로 계산하고 EMA로 큰 방향을 확인합니다. 최근 가격 범위가 ATR 대비 좁으면 진입하지 않습니다.</p></article>
         </div>
         <p class="strategy-disclaimer">이 기준은 수익을 보장하지 않습니다. 충분한 모의투자 결과를 확인한 뒤 조건을 조정하세요.</p>
       </details>

@@ -61,18 +61,51 @@ class KISClientTests(unittest.TestCase):
         self.assertTrue(call.args[0].endswith("/quotations/inquire-time-itemchartprice"))
         self.assertEqual(call.kwargs["headers"]["tr_id"], "FHKST03010200")
 
-    def test_daytrade_rank_returns_only_individual_stocks(self):
+    def test_intraday_bars_include_ohlcv_for_structure_strategy(self):
+        response = Mock(ok=True, status_code=200)
+        response.json.return_value = {
+            "rt_cd": "0",
+            "output2": [{
+                "stck_cntg_hour": "101000", "stck_oprc": "71000",
+                "stck_hgpr": "72000", "stck_lwpr": "70500",
+                "stck_prpr": "71500", "cntg_vol": "123",
+            }],
+        }
+        session = Mock()
+        session.get.return_value = response
+
+        bars = self.authenticated_client(session).intraday_bars("005930")
+
+        self.assertEqual(bars[0], {
+            "time": "101000", "open": 71_000, "high": 72_000,
+            "low": 70_500, "price": 71_500, "volume": 123,
+        })
+
+    def test_daytrade_rank_returns_common_stocks_and_inverse_etfs(self):
         client = self.authenticated_client(Mock())
-        client.volume_rank = Mock(return_value=[
-            {"mksc_shrn_iscd": "005930", "hts_kor_isnm": "삼성전자", "acml_tr_pbmn": "100"},
-            {"mksc_shrn_iscd": "122630", "hts_kor_isnm": "KODEX 레버리지", "acml_tr_pbmn": "300"},
-            {"mksc_shrn_iscd": "360750", "hts_kor_isnm": "TIGER 미국S&P500", "acml_tr_pbmn": "200"},
+        client.volume_rank = Mock(side_effect=[
+            [
+                {"mksc_shrn_iscd": "005930", "hts_kor_isnm": "삼성전자", "acml_tr_pbmn": "100"},
+                {"mksc_shrn_iscd": "122630", "hts_kor_isnm": "KODEX 레버리지", "acml_tr_pbmn": "600"},
+                {"mksc_shrn_iscd": "360750", "hts_kor_isnm": "TIGER 미국S&P500", "acml_tr_pbmn": "550"},
+            ],
+            [
+                {"mksc_shrn_iscd": "0193L0", "hts_kor_isnm": "PLUS 삼성전자선물단일종목인버스2X", "acml_tr_pbmn": "500"},
+                {"mksc_shrn_iscd": "122630", "hts_kor_isnm": "KODEX 레버리지", "acml_tr_pbmn": "300"},
+                {"mksc_shrn_iscd": "360750", "hts_kor_isnm": "TIGER 미국S&P500", "acml_tr_pbmn": "200"},
+                {"mksc_shrn_iscd": "999999", "hts_kor_isnm": "삼성 인버스 ETN", "acml_tr_pbmn": "400"},
+            ],
         ])
 
         rows = client.daytrade_rank(limit=10)
 
-        self.assertEqual([row["mksc_shrn_iscd"] for row in rows], ["005930"])
-        client.volume_rank.assert_called_once_with(limit=10, division="1")
+        self.assertEqual(
+            [row["mksc_shrn_iscd"] for row in rows], ["0193L0", "005930"],
+        )
+        self.assertEqual(client.volume_rank.call_args_list, [
+            unittest.mock.call(limit=30, division="1"),
+            unittest.mock.call(limit=30, division="0"),
+        ])
 
     def test_daily_prices_loads_enough_history_for_long_trend(self):
         response = Mock(ok=True, status_code=200)
@@ -144,6 +177,28 @@ class KISClientTests(unittest.TestCase):
         self.assertEqual(call.kwargs["headers"]["tr_id"], "VTTC0081R")
         self.assertEqual(call.kwargs["params"]["CCLD_DVSN"], "01")
 
+    def test_daily_executions_follows_continuation(self):
+        first = Mock(ok=True, status_code=200)
+        first.headers = {"tr_cont": "M"}
+        first.json.return_value = {
+            "rt_cd": "0", "output1": [{"odno": "1", "pdno": "005930"}],
+            "ctx_area_fk100": "next-fk", "ctx_area_nk100": "next-nk",
+        }
+        second = Mock(ok=True, status_code=200)
+        second.headers = {"tr_cont": ""}
+        second.json.return_value = {
+            "rt_cd": "0", "output1": [{"odno": "2", "pdno": "000660"}],
+        }
+        session = Mock()
+        session.get.side_effect = [first, second]
+
+        rows = self.authenticated_client(session).daily_executions("2026-09-03")
+
+        self.assertEqual([row["odno"] for row in rows], ["1", "2"])
+        second_call = session.get.call_args_list[1].kwargs
+        self.assertEqual(second_call["headers"]["tr_cont"], "M")
+        self.assertEqual(second_call["params"]["CTX_AREA_FK100"], "next-fk")
+
     def test_empty_optional_environment_values_use_safe_defaults(self):
         environment = {
             "KIS_APP_KEY": "key",
@@ -161,6 +216,18 @@ class KISClientTests(unittest.TestCase):
         self.assertEqual(settings.product_code, "01")
         self.assertEqual(settings.max_order_krw, 100_000)
         self.assertFalse(settings.allow_live)
+
+    def test_alphanumeric_etf_symbol_is_normalized_in_allowlist(self):
+        environment = {
+            "KIS_APP_KEY": "key",
+            "KIS_APP_SECRET": "secret",
+            "KIS_ACCOUNT_NO": "12345678",
+            "STOCKCAST_ALLOWED_SYMBOLS": "0193l0",
+        }
+        with patch.dict("os.environ", environment, clear=True):
+            settings = Settings.from_env("file-that-does-not-exist")
+
+        self.assertEqual(settings.allowed_symbols, frozenset({"0193L0"}))
 
 
 if __name__ == "__main__":

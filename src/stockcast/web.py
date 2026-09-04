@@ -10,7 +10,7 @@ from typing import Any
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 import requests
 
-from .config import Settings, update_dotenv
+from .config import Settings, is_domestic_symbol, update_dotenv
 from .autotrade import AutoTradeConfig, AutoTrader
 from .kis import KISAPIError, KISClient, OrderRequest
 from .strategy import SmaCrossStrategy
@@ -136,11 +136,12 @@ def create_app(*, testing: bool = False) -> Flask:
     def logout():
         current = require_context()
         require_csrf(current)
+        report_version = None
         if current.trader:
-            current.trader.stop()
+            report_version = current.trader.disconnect()
         vault.pop(session.get("sid"))
         session.clear()
-        return jsonify({"ok": True})
+        return jsonify({"ok": True, "report_version": report_version})
 
     @app.get("/api/autotrade")
     def autotrade_status():
@@ -159,7 +160,7 @@ def create_app(*, testing: bool = False) -> Flask:
         results = []
         for row in rows:
             symbol = str(row.get("mksc_shrn_iscd") or row.get("stck_shrn_iscd") or "")
-            if len(symbol) != 6 or not symbol.isdigit():
+            if not is_domestic_symbol(symbol):
                 continue
             results.append({
                 "name": str(row.get("hts_kor_isnm") or "종목명 없음"),
@@ -177,7 +178,7 @@ def create_app(*, testing: bool = False) -> Flask:
             raise ValueError("자동매매는 모의투자 계좌에서만 시작할 수 있습니다.")
         data: dict[str, Any] = request.get_json(silent=True) or {}
         symbols = tuple(dict.fromkeys(
-            item.strip() for item in str(data.get("symbols", "")).split(",") if item.strip()
+            item.strip().upper() for item in str(data.get("symbols", "")).split(",") if item.strip()
         ))
         if current.settings.allowed_symbols and any(
             symbol not in current.settings.allowed_symbols for symbol in symbols
@@ -189,24 +190,40 @@ def create_app(*, testing: bool = False) -> Flask:
             scan_limit=int(data.get("scan_limit", 10)),
             select_count=int(data.get("select_count", 3)),
             position_size_pct=float(data.get("position_size_pct", 10)),
-            interval_seconds=int(data.get("interval_seconds", 120)),
+            interval_seconds=int(data.get("interval_seconds", 60)),
             max_positions=int(data.get("max_positions", 3)),
-            stop_loss_pct=float(data.get("stop_loss_pct", 3)),
-            take_profit_pct=float(data.get("take_profit_pct", 5)),
-            daily_target_pct=float(data.get("daily_target_pct", 10)),
+            signal_bar_minutes=int(data.get("signal_bar_minutes", 3)),
+            swing_lookback=int(data.get("swing_lookback", 2)),
+            ema_period=int(data.get("ema_period", 7)),
+            atr_period=int(data.get("atr_period", 5)),
+            chop_lookback=int(data.get("chop_lookback", 4)),
+            min_range_atr=float(data.get("min_range_atr", 2)),
+            use_ema_filter=data.get("use_ema_filter") is not False,
+            use_chop_filter=data.get("use_chop_filter") is not False,
+            min_structure_age_bars=int(data.get("min_structure_age_bars", 1)),
+            max_structure_age_bars=int(data.get("max_structure_age_bars", 5)),
+            min_anchor_distance_atr=float(data.get("min_anchor_distance_atr", 0.2)),
+            max_anchor_distance_atr=float(data.get("max_anchor_distance_atr", 1.5)),
+            min_ema_slope_atr=float(data.get("min_ema_slope_atr", 0)),
+            catastrophe_atr_multiple=float(data.get("catastrophe_atr_multiple", 4)),
             daily_loss_limit_pct=float(data.get("daily_loss_limit_pct", 3)),
             reentry_cooldown_minutes=int(data.get("reentry_cooldown_minutes", 30)),
             max_entries_per_symbol=int(data.get("max_entries_per_symbol", 2)),
-            max_daily_round_trips=int(data.get("max_daily_round_trips", 10)),
-            min_breakout_pct=float(data.get("min_breakout_pct", 0.2)),
-            exit_confirmation_bars=int(data.get("exit_confirmation_bars", 2)),
+            max_daily_round_trips=int(data.get("max_daily_round_trips", 20)),
             profit_lock_activation_pct=float(data.get("profit_lock_activation_pct", 1)),
             profit_giveback_pct=float(data.get("profit_giveback_pct", 0.5)),
-            min_relative_volume=float(data.get("min_relative_volume", 1.5)),
-            trailing_activation_pct=float(data.get("trailing_activation_pct", 2)),
-            trailing_drawdown_pct=float(data.get("trailing_drawdown_pct", 0.7)),
-            breakeven_activation_pct=float(data.get("breakeven_activation_pct", 1)),
-            breakeven_floor_pct=float(data.get("breakeven_floor_pct", 0.1)),
+            profit_protection_activation_pct=float(
+                data.get("profit_protection_activation_pct", 1)
+            ),
+            profit_protection_activation_atr=float(
+                data.get("profit_protection_activation_atr", 2)
+            ),
+            profit_trailing_atr=float(data.get("profit_trailing_atr", 1.5)),
+            profit_trailing_min_pct=float(data.get("profit_trailing_min_pct", 0.5)),
+            profit_floor_pct=float(data.get("profit_floor_pct", 0.2)),
+            profit_exit_confirmation_bars=int(
+                data.get("profit_exit_confirmation_bars", 2)
+            ),
         )
         if current.trader is None:
             current.trader = AutoTrader(current.client)
@@ -228,11 +245,11 @@ def create_app(*, testing: bool = False) -> Flask:
         require_csrf(current)
         data: dict[str, Any] = request.get_json(silent=True) or {}
         symbols = frozenset(
-            item.strip() for item in str(data.get("allowed_symbols", "")).split(",")
+            item.strip().upper() for item in str(data.get("allowed_symbols", "")).split(",")
             if item.strip()
         )
-        if any(len(item) != 6 or not item.isdigit() for item in symbols):
-            raise ValueError("허용 종목은 쉼표로 구분한 6자리 종목코드여야 합니다.")
+        if any(not is_domestic_symbol(item) for item in symbols):
+            raise ValueError("허용 종목은 쉼표로 구분한 6자리 영문·숫자 종목코드여야 합니다.")
         updated = replace(
             current.settings,
             allowed_symbols=symbols,

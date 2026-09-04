@@ -5,6 +5,11 @@ from pathlib import Path
 import os
 
 
+def is_domestic_symbol(value: str) -> bool:
+    """Return whether value is a six-character KRX short code."""
+    return len(value) == 6 and value.isascii() and value.isalnum() and value == value.upper()
+
+
 def load_dotenv(path: str | Path = ".env") -> None:
     """Load a small, dependency-free subset of dotenv without overwriting env vars."""
     file = Path(path)
@@ -83,7 +88,7 @@ class Settings:
         if environment not in {"paper", "live"}:
             raise ValueError("KIS_ENV는 paper 또는 live여야 합니다.")
         symbols = frozenset(
-            item.strip() for item in value("STOCKCAST_ALLOWED_SYMBOLS").split(",")
+            item.strip().upper() for item in value("STOCKCAST_ALLOWED_SYMBOLS").split(",")
             if item.strip()
         )
         settings = cls(
@@ -111,5 +116,7 @@ class Settings:
             raise ValueError("KIS_ACCOUNT_NO는 계좌번호 앞 8자리여야 합니다.")
         if len(self.product_code) != 2 or not self.product_code.isdigit():
             raise ValueError("KIS_ACCOUNT_PRODUCT_CODE는 계좌번호 뒤 2자리여야 합니다.")
+        if any(not is_domestic_symbol(symbol) for symbol in self.allowed_symbols):
+            raise ValueError("STOCKCAST_ALLOWED_SYMBOLS는 6자리 영문·숫자 종목코드여야 합니다.")
         if self.max_order_krw <= 0:
             raise ValueError("STOCKCAST_MAX_ORDER_KRW는 양수여야 합니다.")

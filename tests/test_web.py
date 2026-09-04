@@ -79,12 +79,21 @@ class WebAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("현재 매매기준 보기".encode(), response.data)
         self.assertIn(b'<details class="strategy-details">', response.data)
+        self.assertIn("보통주와 인버스 ETF".encode(), response.data)
+        self.assertIn("Golden Trident 상승 구조".encode(), response.data)
+        self.assertIn("재난 스톱 ATR".encode(), response.data)
+        self.assertIn("수익보호 확인(완료 1분봉)".encode(), response.data)
+        self.assertIn("완료 3분봉 추세·1분봉 수익보호".encode(), response.data)
+        self.assertIn("전체 종목 합산 왕복거래 슬롯".encode(), response.data)
+        self.assertIn(b'id="auto-max-round-trips" type="number" min="1" value="20"', response.data)
+        self.assertNotIn("일일 목표 수익률".encode(), response.data)
+        self.assertNotIn("추적매도 시작".encode(), response.data)
 
     def test_discovery_returns_name_symbol_and_price(self):
         kis = Mock()
         kis.daytrade_rank.return_value = [{
-            "hts_kor_isnm": "삼성전자",
-            "mksc_shrn_iscd": "005930",
+            "hts_kor_isnm": "PLUS 삼성전자선물단일종목인버스2X",
+            "mksc_shrn_iscd": "0193L0",
             "stck_prpr": "71200",
             "prdy_ctrt": "1.25",
         }]
@@ -97,13 +106,16 @@ class WebAppTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["items"][0], {
-            "name": "삼성전자", "symbol": "005930", "price": 71200, "change_rate": 1.25,
+            "name": "PLUS 삼성전자선물단일종목인버스2X",
+            "symbol": "0193L0", "price": 71200, "change_rate": 1.25,
         })
         kis.daytrade_rank.assert_called_once_with(limit=7)
 
     def test_logout_clears_connection(self):
         kis = Mock()
-        context = UserContext(Settings("key", "secret", "12345678"), kis, "csrf")
+        trader = Mock()
+        trader.disconnect.return_value = {"version": 2}
+        context = UserContext(Settings("key", "secret", "12345678"), kis, "csrf", trader)
         self.app.extensions["stockcast_vault"].put("test-session", context)
         with self.client.session_transaction() as browser_session:
             browser_session["sid"] = "test-session"
@@ -111,6 +123,8 @@ class WebAppTests(unittest.TestCase):
         response = self.client.post("/logout", headers={"X-CSRF-Token": "csrf"})
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["report_version"]["version"], 2)
+        trader.disconnect.assert_called_once_with()
         with self.client.session_transaction() as browser_session:
             self.assertNotIn("sid", browser_session)
 

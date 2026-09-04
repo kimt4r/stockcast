@@ -169,14 +169,20 @@ class KISClient:
             },
         )
         rows = sorted(data.get("output2") or [], key=lambda row: row.get("stck_cntg_hour", ""))
-        return [
-            {
+        bars: list[dict[str, int | str]] = []
+        for row in rows:
+            if not row.get("stck_prpr"):
+                continue
+            price = int(row["stck_prpr"])
+            bars.append({
                 "time": str(row.get("stck_cntg_hour") or ""),
-                "price": int(row.get("stck_prpr") or 0),
+                "open": int(row.get("stck_oprc") or price),
+                "high": int(row.get("stck_hgpr") or price),
+                "low": int(row.get("stck_lwpr") or price),
+                "price": price,
                 "volume": int(row.get("cntg_vol") or 0),
-            }
-            for row in rows if row.get("stck_prpr")
-        ]
+            })
+        return bars
 
     def intraday_prices(self, symbol: str) -> list[int]:
         return [int(bar["price"]) for bar in self.intraday_bars(symbol)]
@@ -202,16 +208,30 @@ class KISClient:
         return (data.get("output") or [])[:max(1, min(limit, 30))]
 
     def daytrade_rank(self, *, limit: int = 10) -> list[dict[str, Any]]:
-        ordinary = self.volume_rank(limit=min(limit, 30), division="1")
+        query_limit = 30
+        ordinary = self.volume_rank(limit=query_limit, division="1")
+        all_products = self.volume_rank(limit=query_limit, division="0")
         etf_prefixes = (
             "ACE ", "ARIRANG ", "HANARO ", "KODEX ", "KOSEF ", "PLUS ",
-            "RISE ", "SOL ", "TIGER ", "TIMEFOLIO ",
+            "RISE ", "SOL ", "TIGER ", "TIMEFOLIO ", "1Q ", "FOCUS ",
+            "히어로즈 ", "KIWOOM ", "KOACT ", "TREX ", "WON ", "파워 ",
         )
         unique: dict[str, dict[str, Any]] = {}
         for row in ordinary:
             symbol = str(row.get("mksc_shrn_iscd") or row.get("stck_shrn_iscd") or "")
             name = str(row.get("hts_kor_isnm") or "").upper()
-            if symbol and not name.startswith(etf_prefixes):
+            is_etf = name.startswith(etf_prefixes)
+            is_inverse = "인버스" in name or "INVERSE" in name
+            if symbol and (not is_etf or is_inverse):
+                unique[symbol] = row
+        for row in all_products:
+            symbol = str(row.get("mksc_shrn_iscd") or row.get("stck_shrn_iscd") or "")
+            name = str(row.get("hts_kor_isnm") or "").upper()
+            is_inverse_etf = (
+                name.startswith(etf_prefixes)
+                and ("인버스" in name or "INVERSE" in name)
+            )
+            if symbol and is_inverse_etf:
                 unique[symbol] = row
         ranked = sorted(
             unique.values(),
@@ -262,10 +282,8 @@ class KISClient:
         """Return today's order/fill rows for reporting without account identifiers."""
         compact_date = date.replace("-", "")
         tr_id = "VTTC0081R" if self.settings.environment == "paper" else "TTTC0081R"
-        data = self._get(
-            "/uapi/domestic-stock/v1/trading/inquire-daily-ccld",
-            tr_id,
-            {
+        path = "/uapi/domestic-stock/v1/trading/inquire-daily-ccld"
+        params = {
                 "CANO": self.settings.account_no,
                 "ACNT_PRDT_CD": self.settings.product_code,
                 "INQR_STRT_DT": compact_date,
@@ -280,8 +298,21 @@ class KISClient:
                 "INQR_DVSN_1": "",
                 "CTX_AREA_FK100": "",
                 "CTX_AREA_NK100": "",
-            },
-        )
+        }
+        raw_rows: list[dict[str, Any]] = []
+        tr_cont = ""
+        for _ in range(10):
+            response, data = self._get_response(path, tr_id, params, tr_cont=tr_cont)
+            raw_rows.extend(data.get("output1") or [])
+            tr_cont = response.headers.get("tr_cont", "")
+            if tr_cont not in {"M", "F"}:
+                break
+            next_fk = data.get("ctx_area_fk100", "")
+            next_nk = data.get("ctx_area_nk100", "")
+            if not next_fk and not next_nk:
+                break
+            params["CTX_AREA_FK100"] = next_fk
+            params["CTX_AREA_NK100"] = next_nk
         fields = (
             "ord_dt", "ord_tmd", "odno", "pdno", "prdt_name",
             "sll_buy_dvsn_cd_name", "ord_qty", "tot_ccld_qty",
@@ -289,7 +320,7 @@ class KISClient:
         )
         return [
             {field: row.get(field, "") for field in fields}
-            for row in (data.get("output1") or [])
+            for row in raw_rows
         ]
 
     def order(self, request: OrderRequest) -> dict[str, Any]:
